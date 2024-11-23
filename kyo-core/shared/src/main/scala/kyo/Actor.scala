@@ -132,12 +132,18 @@ object Actor:
     /// A mailbox is a queue of messages that an actor can process.
     abstract class Mailbox[A] extends Sender[A]:
         self =>
+        def channel: Channel[A]
         // private[kyo] def sendSystemMessage(message: Any)(using Frame): Unit < Async
         // def call[Req <: A, Res](request: Req)(using Frame): Res < (Async & Abort[Closed])
         def put(message: A)(using Frame): Unit < (Async & Abort[errors.Stopped | Closed]) = ???
     end Mailbox
 
     object Mailbox:
+        def init[A](size: Int)(using Frame): Mailbox[A] < IO =
+            for
+                inbox <- Channel.init[A](size, Access.MultiProducerSingleConsumer)
+            yield new Mailbox[A]:
+                val channel = inbox
 
     end Mailbox
 
@@ -178,7 +184,11 @@ object Actor:
     object Supervisor:
     end Supervisor
 
+    abstract class Context[Msg, State]:
+        def getMessage: Msg < Async
+
     abstract class Behavior[-Msg, State]:
+        private[Actor] def run(context: Context[Msg, State])(using Frame): State < Async = ???
         def receive(message: Msg, state: State)(using Frame): State < (Async & Abort[Throwable | Closed])
     end Behavior
 
