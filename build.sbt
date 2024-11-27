@@ -9,8 +9,8 @@ val scala3Version   = "3.5.2"
 val scala212Version = "2.12.20"
 val scala213Version = "2.13.15"
 
-val zioVersion       = "2.1.12"
-val catsVersion      = "3.5.5"
+val zioVersion       = "2.1.13"
+val catsVersion      = "3.5.7"
 val scalaTestVersion = "3.2.19"
 
 val compilerOptionFailDiscard = "-Wconf:msg=(discarded.*value|pure.*statement):error"
@@ -137,11 +137,13 @@ lazy val kyoNative = project
     .disablePlugins(MimaPlugin)
     .aggregate(
         `kyo-data`.native,
-        `kyo-prelude`.native
+        `kyo-prelude`.native,
+        `kyo-stats-registry`.native,
+        `kyo-scheduler`.native
     )
 
 lazy val `kyo-scheduler` =
-    crossProject(JSPlatform, JVMPlatform)
+    crossProject(JSPlatform, JVMPlatform, NativePlatform)
         .withoutSuffixFor(JVMPlatform)
         .crossType(CrossType.Full)
         .dependsOn(`kyo-stats-registry`)
@@ -154,6 +156,11 @@ lazy val `kyo-scheduler` =
             libraryDependencies += "ch.qos.logback"  % "logback-classic" % "1.5.12"         % Test
         )
         .jvmSettings(mimaCheck(false))
+        .nativeSettings(
+            `native-settings`,
+            crossScalaVersions                         := List(scala3Version),
+            libraryDependencies += "org.scala-native" %%% "scala-native-java-logging" % "1.0.0"
+        )
         .jsSettings(
             `js-settings`,
             libraryDependencies += "org.scala-js" %%% "scala-js-macrotask-executor" % "1.1.1"
@@ -182,7 +189,6 @@ lazy val `kyo-data` =
         .settings(
             `kyo-settings`,
             libraryDependencies += "com.lihaoyi"   %%% "pprint"        % "0.9.0",
-            libraryDependencies += "dev.zio"       %%% "zio-test-sbt"  % zioVersion       % Test,
             libraryDependencies += "org.scalatest" %%% "scalatest"     % scalaTestVersion % Test,
             libraryDependencies += "dev.zio"       %%% "izumi-reflect" % "2.3.10"         % Test
         )
@@ -199,7 +205,7 @@ lazy val `kyo-prelude` =
         .settings(
             `kyo-settings`,
             libraryDependencies += "org.jctools"   % "jctools-core"  % "4.0.5",
-            libraryDependencies += "dev.zio"     %%% "zio-laws-laws" % "1.0.0-RC34" % Test,
+            libraryDependencies += "dev.zio"     %%% "zio-laws-laws" % "1.0.0-RC35" % Test,
             libraryDependencies += "dev.zio"     %%% "zio-test-sbt"  % zioVersion   % Test,
             libraryDependencies += "org.javassist" % "javassist"     % "3.30.2-GA"  % Test
         )
@@ -219,13 +225,16 @@ lazy val `kyo-core` =
             libraryDependencies += "org.jctools"    % "jctools-core"    % "4.0.5",
             libraryDependencies += "org.slf4j"      % "slf4j-api"       % "2.0.16",
             libraryDependencies += "dev.dirs"       % "directories"     % "26",
-            libraryDependencies += "dev.zio"      %%% "zio-laws-laws"   % "1.0.0-RC34" % Test,
-            libraryDependencies += "dev.zio"      %%% "zio-test-sbt"    % "2.1.12"     % Test,
+            libraryDependencies += "dev.zio"      %%% "zio-laws-laws"   % "1.0.0-RC35" % Test,
+            libraryDependencies += "dev.zio"      %%% "zio-test-sbt"    % "2.1.13"     % Test,
             libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.5.12"     % Test,
             libraryDependencies += "org.javassist"  % "javassist"       % "3.30.2-GA"  % Test
         )
         .jvmSettings(mimaCheck(false))
-        .jsSettings(`js-settings`)
+        .jsSettings(
+            `js-settings`,
+            libraryDependencies += ("org.scala-js" %%% "scalajs-java-logging" % "1.0.0").cross(CrossVersion.for3Use2_13)
+        )
 
 lazy val `kyo-direct` =
     crossProject(JSPlatform, JVMPlatform)
@@ -241,7 +250,7 @@ lazy val `kyo-direct` =
         .jsSettings(`js-settings`)
 
 lazy val `kyo-stats-registry` =
-    crossProject(JSPlatform, JVMPlatform)
+    crossProject(JSPlatform, JVMPlatform, NativePlatform)
         .withoutSuffixFor(JVMPlatform)
         .crossType(CrossType.Full)
         .in(file("kyo-stats-registry"))
@@ -253,6 +262,7 @@ lazy val `kyo-stats-registry` =
             crossScalaVersions                       := List(scala3Version, scala212Version, scala213Version)
         )
         .jvmSettings(mimaCheck(false))
+        .nativeSettings(`native-settings`)
         .jsSettings(`js-settings`)
 
 lazy val `kyo-stats-otel` =
@@ -382,7 +392,7 @@ lazy val `kyo-monix` =
         .dependsOn(`kyo-core`)
         .settings(
             `kyo-settings`,
-            libraryDependencies += "io.monix" %% "monix" % "3.4.1",
+            libraryDependencies += "io.monix"       %% "monix"     % "3.4.1",
             libraryDependencies += "org.scalatest" %%% "scalatest" % scalaTestVersion % Test
         )
         .jvmSettings(mimaCheck(false))
@@ -469,14 +479,14 @@ lazy val `kyo-bench` =
             libraryDependencies += "dev.zio"             %% "zio"                 % zioVersion,
             libraryDependencies += "dev.zio"             %% "zio-concurrent"      % zioVersion,
             libraryDependencies += "dev.zio"             %% "zio-query"           % "0.7.6",
-            libraryDependencies += "dev.zio"             %% "zio-prelude"         % "1.0.0-RC34",
+            libraryDependencies += "dev.zio"             %% "zio-prelude"         % "1.0.0-RC35",
             libraryDependencies += "com.softwaremill.ox" %% "core"                % "0.0.25",
             libraryDependencies += "co.fs2"              %% "fs2-core"            % "3.11.0",
             libraryDependencies += "org.http4s"          %% "http4s-ember-client" % "0.23.29",
             libraryDependencies += "org.http4s"          %% "http4s-dsl"          % "0.23.29",
             libraryDependencies += "dev.zio"             %% "zio-http"            % "3.0.1",
-            libraryDependencies += "io.vertx"             % "vertx-core"          % "5.0.0.CR1",
-            libraryDependencies += "io.vertx"             % "vertx-web"           % "5.0.0.CR1",
+            libraryDependencies += "io.vertx"             % "vertx-core"          % "5.0.0.CR2",
+            libraryDependencies += "io.vertx"             % "vertx-web"           % "5.0.0.CR2",
             libraryDependencies += "org.scalatest"       %% "scalatest"           % scalaTestVersion % Test
         )
 
@@ -520,8 +530,9 @@ lazy val readme =
         )
 
 lazy val `native-settings` = Seq(
-    fork       := false,
-    bspEnabled := false
+    fork                                        := false,
+    bspEnabled                                  := false,
+    libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.6.0" % "provided"
 )
 
 lazy val `js-settings` = Seq(
@@ -529,7 +540,7 @@ lazy val `js-settings` = Seq(
     fork                                        := false,
     bspEnabled                                  := false,
     jsEnv                                       := new NodeJSEnv(NodeJSEnv.Config().withArgs(List("--max_old_space_size=5120"))),
-    libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.5.0" % "provided"
+    libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.6.0" % "provided"
 )
 
 def scalacOptionToken(proposedScalacOption: ScalacOption) =
